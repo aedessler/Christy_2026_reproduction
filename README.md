@@ -12,13 +12,18 @@ Replication and extension of:
 
 This directory contains data and Python scripts to reproduce the daily temperature
 extreme analyses from Christy (2026). The study examines hot and cold extremes for
-1,218 USHCN stations across the contiguous US (CONUS) over 1899–2025
+1,218 USHCN stations across the contiguous US (CONUS) over 1899–2025.
 
-The Fortran code was downloaded from [here](https://www.nsstc.uah.edu/data/ushcn_jrc/) was converted by me into the Python code here.
+The original Fortran code was downloaded from [UAH/NSSTC](https://www.nsstc.uah.edu/data/ushcn_jrc/)
+and converted into the Python scripts here.
 
-Note that the original Fortran does regridding of the data, but that requires files that were not included in the data archive (usreg_half.txt). My version does not have that process in it.
+Note that the original Fortran performs IDW regridding of station data to a 0.5° grid
+before computing regional averages, but that requires `usreg_half.txt` which was not
+included in the data archive. The Python version skips that step and uses a simple
+station average instead, which closely reproduces Figures 3 and 4 from the paper.
 
-Nevertheless, my Python version closely reproduces Figures 3 and 4 from the paper.
+The Python port also corrects an off-by-one bug in the Fortran's per-event output: the
+original printed one extra (non-wave) day at the end of each reported event.
 
 ---
 
@@ -35,7 +40,10 @@ Nevertheless, my Python version closely reproduces Figures 3 and 4 from the pape
 | `ushcn_jrc_readme_260421.txt` | 7 KB | Data format documentation |
 | `US_MidW_61stn_dly_ppt_1893_2024_250704.xlsx` | 12 MB | Midwest precipitation dataset (61 stations) |
 
-Data source: [UAH/NSSTC](https://www.nsstc.uah.edu/data/ushcn_jrc/)
+> The two large temperature files (`ushcn_jrc_tmax_260421.txt` and
+> `ushcn_jrc_tmin_260421.txt`) are excluded from the git repository due to GitHub's
+> 100 MB file size limit. Download them from the
+> [UAH/NSSTC data archive](https://www.nsstc.uah.edu/data/ushcn_jrc/).
 
 **Data format** (temperature files): space-delimited, one record per station/year/month.
 
@@ -51,25 +59,15 @@ omitted for states 01–09).
 
 | File | Description |
 |------|-------------|
-| `us_dly_waves.py` | Heat/cold wave frequency analysis (Python port of `us_dly_waves.f`) |
+| `us_dly_waves.py` | Heat/cold wave frequency analysis (Python port of Fortran original) |
 | `figures.py` | Reproduces Fig. 3 and Fig. 4 from the paper |
-| `us_dly_waves.f` | Original Fortran source (shell + Fortran heredoc) |
 
 ### Figures
 
 | File | Description |
 |------|-------------|
-| `Fig3.jpg` | Reproduced Fig. 3 (all-time record fractions) |
+| `Fig3.jpg` | Reproduced Fig. 3 (all-time record fractions by year) |
 | `Fig4.jpg` | Reproduced Fig. 4 (daily records per station per year) |
-| `Fig3.png` | Original Fig. 3 from the paper |
-| `Fig4.png` | Original Fig. 4 from the paper |
-
-### Documents
-
-| File | Description |
-|------|-------------|
-| `s00704-026-06200-3.pdf` | Full paper (Christy 2026) |
-| `SI.Precipt_trends_reproducing.pdf` | Supplementary info for precipitation trends |
 
 ---
 
@@ -114,7 +112,7 @@ python us_dly_waves.py --var tmin --percentile 5 --min-run 4 > output_tmin.txt
 3. State averages for all 48 continental US states
 
 > **Note:** Regional (CONUS grid) averages are skipped because `usreg_half.txt`
-> (a 116×50 half-degree US region grid) is not included in this directory.
+> (a 116×50 half-degree US region grid) is not included in the data archive.
 
 ---
 
