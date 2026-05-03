@@ -12,10 +12,13 @@ Replication and extension of:
 
 This directory contains data and Python scripts to reproduce the daily temperature
 extreme analyses from Christy (2026). The study examines hot and cold extremes for
-1,218 USHCN stations across the contiguous US (CONUS) over 1899–2025:
+1,218 USHCN stations across the contiguous US (CONUS) over 1899–2025
 
-- **Warm season (May–Sep):** daily maximum temperature (T_Max)
-- **Cold season (Dec–Mar):** daily minimum temperature (T_Min)
+The Fortran code was downloaded from [here](https://www.nsstc.uah.edu/data/ushcn_jrc/) was converted by me into the Python code here.
+
+Note that the original Fortran does regridding of the data, but that requires files that were not included in the data archive (usreg_half.txt). My version does not have that process in it.
+
+Nevertheless, my Python version closely reproduces Figures 3 and 4 from the paper.
 
 ---
 
