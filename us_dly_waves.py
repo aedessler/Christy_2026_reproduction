@@ -20,6 +20,10 @@ NYB = 1899          # first year in dataset
 NYE = 2025          # last year in dataset
 N_YEARS = NYE - NYB + 1   # 127
 
+NX = 116                # grid columns (lon)
+NY = 50                 # grid rows (lat)
+IDW_RADIUS_KM = 115.0   # Fortran uses 115 km search radius
+
 # COOP state numeric codes 1-48 → 2-letter abbreviations (Fortran data ast).
 # Index 48 (state "49") = CONUS average (set from regional grid, unavailable here).
 STATE_ABBR = [
@@ -285,6 +289,96 @@ def state_averages(nval_all: np.ndarray, stn_order: list) -> np.ndarray:
     return xsval
 
 
+# ── IDW CONUS gridding ────────────────────────────────────────────────────────
+
+def load_mask(data_dir: Path):
+    """Read usreg_half.txt → (NY, NX) int8 array, or None if file is absent."""
+    path = data_dir / 'usreg_half.txt'
+    if not path.exists():
+        return None
+    mask = np.zeros((NY, NX), dtype=np.int8)
+    with open(path) as f:
+        for j, line in enumerate(f):
+            if j >= NY:
+                break
+            mask[j] = np.fromstring(line, sep=' ', dtype=np.int8)
+    return mask
+
+
+def _haversine_km(lat1, lon1, lat2, lon2):
+    """Vectorized haversine distance in km (degrees input, broadcasts freely)."""
+    R = 6371.0
+    dlat = np.radians(lat2 - lat1)
+    dlon = np.radians(lon2 - lon1)
+    a = (np.sin(dlat / 2) ** 2
+         + np.cos(np.radians(lat1)) * np.cos(np.radians(lat2)) * np.sin(dlon / 2) ** 2)
+    return R * 2.0 * np.arctan2(np.sqrt(a), np.sqrt(1.0 - a))
+
+
+def build_idw_weights(mask: np.ndarray, stations: dict, stn_order: list) -> np.ndarray:
+    """Precompute IDW weight matrix (n_conus_cells, n_stns).
+
+    For each CONUS grid cell, weight[cell, stn] = (radius/dist)^2 if dist ≤ radius,
+    else 0.  Stations without lat/lon metadata get weight 0 everywhere.
+
+    Grid cell coordinates (j=0 is northernmost row in file):
+        lat = 49.75 - j*0.5
+        lon = i*0.5 - 124.25
+    """
+    stn_lats = np.array([stations.get(s, (np.nan, np.nan))[0] for s in stn_order])
+    stn_lons = np.array([stations.get(s, (np.nan, np.nan))[1] for s in stn_order])
+
+    cell_lats, cell_lons = [], []
+    for j in range(NY):
+        for i in range(NX):
+            if mask[j, i] > 0:
+                cell_lats.append(49.75 - j * 0.5)
+                cell_lons.append(i * 0.5 - 124.25)
+
+    clat = np.array(cell_lats)[:, None]   # (n_cells, 1)
+    clon = np.array(cell_lons)[:, None]
+
+    dist = _haversine_km(clat, clon, stn_lats[None, :], stn_lons[None, :])
+    # (n_cells, n_stns)
+
+    weights = np.where(
+        dist <= IDW_RADIUS_KM,
+        (IDW_RADIUS_KM / np.maximum(dist, 0.1)) ** 2,
+        0.0,
+    )
+    return weights.astype(np.float32)
+
+
+def conus_idw_average(nval_all: np.ndarray, weights: np.ndarray) -> np.ndarray:
+    """IDW CONUS average wave days per year.
+
+    nval_all : (n_stns, N_YEARS), -99 sentinel for missing years
+    weights  : (n_cells, n_stns) precomputed from build_idw_weights()
+    Returns  : conus_avg[N_YEARS] float32, -99 where no data
+    """
+    conus_avg = np.full(N_YEARS, -99.0, dtype=np.float32)
+    weights = weights.astype(np.float64)
+
+    for yi in range(N_YEARS):
+        vals = nval_all[:, yi].astype(np.float64)
+        valid = vals > -90
+        vals[~valid] = 0.0
+
+        w = weights * valid[None, :]          # zero-out missing stations
+        w_sum = w.sum(axis=1)                 # (n_cells,)
+        cell_vals = np.where(
+            w_sum > 0,
+            (w * vals[None, :]).sum(axis=1) / w_sum,
+            np.nan,
+        )
+
+        good = ~np.isnan(cell_vals)
+        if good.any():
+            conus_avg[yi] = float(cell_vals[good].mean())
+
+    return conus_avg
+
+
 # ── Output printers ───────────────────────────────────────────────────────────
 
 def print_station_table(nval_all: np.ndarray, stn_order: list) -> None:
@@ -301,7 +395,12 @@ def print_station_table(nval_all: np.ndarray, stn_order: list) -> None:
         print()
 
 
-def print_state_table(xsval: np.ndarray, nperc: int, nrun: int) -> None:
+def print_state_table(
+    xsval: np.ndarray,
+    conus_avg: np.ndarray,
+    nperc: int,
+    nrun: int,
+) -> None:
     """Print per-state averages (Fortran format 200/201/101/102)."""
     abbr = STATE_ABBR   # 49 entries, index 0-47 = states 1-48, index 48 = US
 
@@ -317,12 +416,12 @@ def print_state_table(xsval: np.ndarray, nperc: int, nrun: int) -> None:
 
     print()
 
-    # Block 2: states 25-48 + CONUS placeholder (indices 24-47, then 48='US')
+    # Block 2: states 25-48 + CONUS IDW average (indices 24-47, then 48='US')
     hdr2 = ''.join(f'   {abbr[i]:2s} ' for i in range(24, 49))
     print(hdr2)
     for yi in range(N_YEARS):
         vals = list(xsval[24:48, yi])
-        vals.append(-99.0)          # CONUS slot (requires usreg_half.txt)
+        vals.append(float(conus_avg[yi]))
         print(''.join(f'{v:6.2f}' for v in vals))
     print(hdr2)
 
@@ -369,14 +468,23 @@ def main() -> None:
 
     print(f'  {n_stns}/{n_stns} done', file=sys.stderr)
 
+    # ── IDW CONUS average ────────────────────────────────────────────────────
+    mask = load_mask(data_dir)
+    if mask is not None:
+        print('Building IDW weight matrix …', file=sys.stderr)
+        weights = build_idw_weights(mask, stations, stn_order)
+        print('Computing IDW CONUS average …', file=sys.stderr)
+        conus_avg = conus_idw_average(nval_all, weights)
+    else:
+        print('  usreg_half.txt not found — CONUS average set to -99', file=sys.stderr)
+        print('  Run make_conus_mask.py to generate it.', file=sys.stderr)
+        conus_avg = np.full(N_YEARS, -99.0, dtype=np.float32)
+
     # ── Output ──────────────────────────────────────────────────────────────
     print_station_table(nval_all, stn_order)
 
     xsval = state_averages(nval_all, stn_order)
-    print_state_table(xsval, nperc, nrun)
-
-    print()
-    print(' Regional averages: skipped (usreg_half.txt not available)')
+    print_state_table(xsval, conus_avg, nperc, nrun)
 
 
 if __name__ == '__main__':

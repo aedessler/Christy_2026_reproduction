@@ -20,3 +20,9 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# Claude Code internal config
+.claude/
+
+# Downloaded Census Bureau shapefile (cached by make_conus_mask.py on first run)
+cb_2018_us_nation_5m/
