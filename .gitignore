@@ -3,6 +3,9 @@
 ushcn_jrc_tmax_260421.txt
 ushcn_jrc_tmin_260421.txt
 
+# Fortran source
+*.f
+
 # PDFs (copyrighted journal content)
 *.pdf
 
