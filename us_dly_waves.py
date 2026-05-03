@@ -247,9 +247,7 @@ def count_waves(
             if run_len >= nrun:
                 total += run_len
                 if year > 1984:
-                    # Fortran prints days idy-icnt … idy inclusive (idy = first non-run day).
-                    # In 0-indexed terms that is range(s, e+1).
-                    for jdy in range(s, min(e + 1, jtot)):
+                    for jdy in range(s, e):
                         v = int(jval[yi, jdy]) if not np.isnan(jval[yi, jdy]) else -999
                         t = int(ntval[jdy])    if not np.isnan(ntval[jdy])    else -999
                         print(f'{stn_id:7d}{year:5d}{jdy + 1:4d}{run_len:4d}{v:4d}{t:4d}')
