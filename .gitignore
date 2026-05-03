@@ -3,6 +3,10 @@
 ushcn_jrc_tmax_260421.txt
 ushcn_jrc_tmin_260421.txt
 
+# Original figure PNGs (from paper)
+Fig3.png
+Fig4.png
+
 # Fortran source
 *.f
 
