@@ -1,0 +1,15 @@
+# Large data files (>100 MB — exceed GitHub's file size limit)
+# Download from https://www.nsstc.uah.edu/data/ushcn_jrc/
+ushcn_jrc_tmax_260421.txt
+ushcn_jrc_tmin_260421.txt
+
+# PDFs (copyrighted journal content)
+*.pdf
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
